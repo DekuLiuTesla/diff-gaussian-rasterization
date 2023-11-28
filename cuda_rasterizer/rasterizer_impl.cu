@@ -201,10 +201,11 @@ int CudaRasterizer::Rasterizer::forward(
 	std::function<char* (size_t)> imageBuffer,
 	const int P, int D, int M,
 	const float* background,
-	const int width, int height,
+	const int width, int height, int extra_C,
 	const float* means3D,
 	const float* shs,
 	const float* colors_precomp,
+	const float* extra_feats,
 	const float* opacities,
 	const float* scales,
 	const float scale_modifier,
@@ -216,6 +217,7 @@ int CudaRasterizer::Rasterizer::forward(
 	const float tan_fovx, float tan_fovy,
 	const bool prefiltered,
 	float* out_color,
+	float* out_features,
 	int* radii,
 	bool debug)
 {
@@ -277,7 +279,7 @@ int CudaRasterizer::Rasterizer::forward(
 	CHECK_CUDA(cub::DeviceScan::InclusiveSum(geomState.scanning_space, geomState.scan_size, geomState.tiles_touched, geomState.point_offsets, P), debug)
 
 	// Retrieve total number of Gaussian instances to launch and resize aux buffers
-	int num_rendered;
+	int num_rendered; // FAN: seems to be the number of times of rendering, why plus P - 1?
 	CHECK_CUDA(cudaMemcpy(&num_rendered, geomState.point_offsets + P - 1, sizeof(int), cudaMemcpyDeviceToHost), debug);
 
 	size_t binning_chunk_size = required<BinningState>(num_rendered);
@@ -319,18 +321,21 @@ int CudaRasterizer::Rasterizer::forward(
 
 	// Let each tile blend its range of Gaussians independently in parallel
 	const float* feature_ptr = colors_precomp != nullptr ? colors_precomp : geomState.rgb;
+	const float* extra_feature_ptr = extra_feats;
 	CHECK_CUDA(FORWARD::render(
 		tile_grid, block,
 		imgState.ranges,
 		binningState.point_list,
-		width, height,
+		width, height, extra_C,
 		geomState.means2D,
 		feature_ptr,
+		extra_feature_ptr,
 		geomState.conic_opacity,
 		imgState.accum_alpha,
 		imgState.n_contrib,
 		background,
-		out_color), debug)
+		out_color,
+		out_features), debug)
 
 	return num_rendered;
 }

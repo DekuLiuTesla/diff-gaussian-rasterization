@@ -263,17 +263,19 @@ __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
 renderCUDA(
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
-	int W, int H,
+	int W, int H, int extra_C,
 	const float2* __restrict__ points_xy_image,
 	const float* __restrict__ features,
+	const float* __restrict__ extra_features,
 	const float4* __restrict__ conic_opacity,
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ bg_color,
-	float* __restrict__ out_color)
+	float* __restrict__ out_color,
+	float* __restrict__ out_extra_feat)
 {
 	// Identify current tile and associated min/max pixel range.
-	auto block = cg::this_thread_block();
+	auto block = cg::this_thread_block(); // FAN: a block is a tile
 	uint32_t horizontal_blocks = (W + BLOCK_X - 1) / BLOCK_X;
 	uint2 pix_min = { block.group_index().x * BLOCK_X, block.group_index().y * BLOCK_Y };
 	uint2 pix_max = { min(pix_min.x + BLOCK_X, W), min(pix_min.y + BLOCK_Y , H) };
@@ -288,7 +290,7 @@ renderCUDA(
 
 	// Load start/end range of IDs to process in bit sorted list.
 	uint2 range = ranges[block.group_index().y * horizontal_blocks + block.group_index().x];
-	const int rounds = ((range.y - range.x + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	const int rounds = ((range.y - range.x + BLOCK_SIZE - 1) / BLOCK_SIZE); // FAN: BLOCK_SIZE = BLOCK_X * BLOCK_Y = 16 * 16
 	int toDo = range.y - range.x;
 
 	// Allocate storage for batches of collectively fetched data.
@@ -300,7 +302,7 @@ renderCUDA(
 	float T = 1.0f;
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
-	float C[CHANNELS] = { 0 };
+	float C[CHANNELS] = { 0 }; // FAN: this should be in registers
 
 	// Iterate over batches until all done or range is complete
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -311,6 +313,13 @@ renderCUDA(
 			break;
 
 		// Collectively fetch per-Gaussian data from global to shared
+		//**** FAN:
+		// Here each thread play two roles: 
+		// (1) responsible for a pixel to accumulate all gaussians afftecting this pixel
+		// (2) As a "part-time" worker to move gaussians to shared memory.
+		// In each round, all thread collectively move 16 * 16 gaussians to shared memory.
+		// And in the inner for-loop, each thread accumulates this moved 256 gaussians in own pixel position.
+		//****
 		int progress = i * BLOCK_SIZE + block.thread_rank();
 		if (range.x + progress < range.y)
 		{
@@ -354,6 +363,13 @@ renderCUDA(
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
 
+
+			if (inside && extra_C > 0){
+				// this might be slow due to lack of shared memory. Change of channel order may make it faster
+				for (int ch = 0; ch < extra_C; ch++)
+					out_extra_feat[ch * H * W + pix_id] += extra_features[collected_id[j] * extra_C + ch] * alpha * T;
+			}
+
 			T = test_T;
 
 			// Keep track of last range entry to update this
@@ -377,26 +393,34 @@ void FORWARD::render(
 	const dim3 grid, dim3 block,
 	const uint2* ranges,
 	const uint32_t* point_list,
-	int W, int H,
+	int W,
+	int H,
+	int extra_C,
 	const float2* means2D,
 	const float* colors,
+	const float* feats,
 	const float4* conic_opacity,
 	float* final_T,
 	uint32_t* n_contrib,
 	const float* bg_color,
-	float* out_color)
+	float* out_color,
+	float* out_features)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
 		point_list,
-		W, H,
+		W,
+		H,
+		extra_C,
 		means2D,
 		colors,
+		feats,
 		conic_opacity,
 		final_T,
 		n_contrib,
 		bg_color,
-		out_color);
+		out_color,
+		out_features);
 }
 
 void FORWARD::preprocess(int P, int D, int M,

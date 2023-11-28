@@ -37,8 +37,8 @@ namespace CudaRasterizer
 		float* cov3D;
 		float4* conic_opacity;
 		float* rgb;
-		uint32_t* point_offsets;
-		uint32_t* tiles_touched;
+		uint32_t* point_offsets; // FAN: inclusive sum of tiles_touched, indicating the position of a pair
+		uint32_t* tiles_touched; // FAN: number of touched tiles per gaussian
 
 		static GeometryState fromChunk(char*& chunk, size_t P);
 	};

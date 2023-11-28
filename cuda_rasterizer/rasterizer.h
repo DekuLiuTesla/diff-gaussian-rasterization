@@ -34,10 +34,11 @@ namespace CudaRasterizer
 			std::function<char* (size_t)> imageBuffer,
 			const int P, int D, int M,
 			const float* background,
-			const int width, int height,
+			const int width, int height, int extra_C,
 			const float* means3D,
 			const float* shs,
 			const float* colors_precomp,
+			const float* extra_feats,
 			const float* opacities,
 			const float* scales,
 			const float scale_modifier,
@@ -49,6 +50,7 @@ namespace CudaRasterizer
 			const float tan_fovx, float tan_fovy,
 			const bool prefiltered,
 			float* out_color,
+			float* out_features,
 			int* radii = nullptr,
 			bool debug = false);
 
