@@ -272,7 +272,10 @@ renderCUDA(
 	uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color,
-	float* __restrict__ out_extra_feat)
+	float* __restrict__ out_extra_feat,
+	float* __restrict__ transmittance,
+	int* __restrict__ num_covered_pixels,
+	bool record_transmittance)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block(); // FAN: a block is a tile
@@ -362,6 +365,11 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+				
+			if (record_transmittance){
+				atomicAdd(&transmittance[collected_id[j]], T);
+				atomicAdd(&num_covered_pixels[collected_id[j]], 1);
+			}
 
 
 			if (inside && extra_C > 0){
@@ -404,7 +412,10 @@ void FORWARD::render(
 	uint32_t* n_contrib,
 	const float* bg_color,
 	float* out_color,
-	float* out_features)
+	float* out_features,
+	float* transmittance,
+	int* num_covered_pixels,
+	bool record_transmittance)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -420,7 +431,10 @@ void FORWARD::render(
 		n_contrib,
 		bg_color,
 		out_color,
-		out_features);
+		out_features,
+		transmittance,
+		num_covered_pixels,
+		record_transmittance);
 }
 
 void FORWARD::preprocess(int P, int D, int M,

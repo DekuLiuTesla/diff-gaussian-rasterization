@@ -61,7 +61,10 @@ namespace FORWARD
 		uint32_t* n_contrib,
 		const float* bg_color,
 		float* out_color,
-		float* out_features);
+		float* out_features,
+		float* transmittance,
+		int* num_covered_pixels,
+		bool record_transmittance);
 }
 
 

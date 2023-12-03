@@ -2,4 +2,6 @@ build/
 diff_gaussian_rasterization.egg-info/
 dist/
 *.so
+*.pth
+*.pkl
 __pycache__
