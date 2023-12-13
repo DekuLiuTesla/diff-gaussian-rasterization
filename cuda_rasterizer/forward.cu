@@ -353,6 +353,12 @@ renderCUDA(
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix). 
 			float alpha = min(0.99f, con_o.w * exp(power));
+
+			if (record_transmittance){
+				atomicAdd(&transmittance[collected_id[j]], T);
+				atomicAdd(&num_covered_pixels[collected_id[j]], 1);
+			}
+
 			if (alpha < 1.0f / 255.0f)
 				continue;
 			float test_T = T * (1 - alpha);
@@ -365,12 +371,6 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
-				
-			if (record_transmittance){
-				atomicAdd(&transmittance[collected_id[j]], T);
-				atomicAdd(&num_covered_pixels[collected_id[j]], 1);
-			}
-
 
 			if (inside && extra_C > 0){
 				// this might be slow due to lack of shared memory. Change of channel order may make it faster
