@@ -277,6 +277,7 @@ renderCUDA(
 	float* __restrict__ out_depth,
 	float* __restrict__ transmittance,
 	int* __restrict__ num_covered_pixels,
+	int* __restrict__ out_indexBuffer, int index_buffer_size,
 	bool record_transmittance)
 {
 	// Identify current tile and associated min/max pixel range.
@@ -307,6 +308,7 @@ renderCUDA(
 	float T = 1.0f;
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
+	uint32_t indexBuffer_count = 0;
 	float C[CHANNELS] = { 0 };
 	float D = 0;
 
@@ -380,6 +382,12 @@ renderCUDA(
 				for (int ch = 0; ch < extra_C; ch++)
 					out_extra_feat[ch * H * W + pix_id] += extra_features[collected_id[j] * extra_C + ch] * alpha * T;
 			}
+
+			if (inside && indexBuffer_count < index_buffer_size){
+				out_indexBuffer[indexBuffer_count * H * W + pix_id] = collected_id[j];
+				indexBuffer_count++;
+			}
+
 			D += depths[collected_id[j]] * alpha * T;
 
 			T = test_T;
@@ -422,6 +430,7 @@ void FORWARD::render(
 	float* out_depth,
 	float* transmittance,
 	int* num_covered_pixels,
+	int* out_indexBuffer, int index_buffer_size,
 	bool record_transmittance)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
@@ -443,6 +452,7 @@ void FORWARD::render(
 		out_depth,
 		transmittance,
 		num_covered_pixels,
+		out_indexBuffer, index_buffer_size,
 		record_transmittance);
 }
 

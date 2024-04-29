@@ -66,6 +66,7 @@ namespace FORWARD
 		float* out_depth,
 		float* transmittance,
 		int* num_covered_pixels,
+		int* out_indexBuffer, int index_buffer_size,
 		bool record_transmittance);
 }
 
