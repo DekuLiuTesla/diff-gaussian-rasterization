@@ -63,7 +63,7 @@ namespace FORWARD
 		const float* bg_color,
 		float* out_color,
 		float* out_features,
-		float* out_depth,
+		float* out_median_depth,
 		float* transmittance,
 		int* num_covered_pixels,
 		int* out_indexBuffer, int index_buffer_size,

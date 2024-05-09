@@ -274,7 +274,7 @@ renderCUDA(
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color,
 	float* __restrict__ out_extra_feat,
-	float* __restrict__ out_depth,
+	float* __restrict__ out_median_depth,
 	float* __restrict__ transmittance,
 	int* __restrict__ num_covered_pixels,
 	int* __restrict__ out_indexBuffer, int index_buffer_size,
@@ -360,7 +360,7 @@ renderCUDA(
 			float alpha = min(0.99f, con_o.w * exp(power));
 
 			if (record_transmittance){
-				atomicAdd(&transmittance[collected_id[j]], T);
+				atomicAdd(&transmittance[collected_id[j]], T * alpha);
 				atomicAdd(&num_covered_pixels[collected_id[j]], 1);
 			}
 
@@ -372,6 +372,9 @@ renderCUDA(
 				done = true;
 				continue;
 			}
+
+			if (T > 0.5)
+				D = depths[collected_id[j]];
 
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
@@ -387,8 +390,6 @@ renderCUDA(
 				out_indexBuffer[indexBuffer_count * H * W + pix_id] = collected_id[j];
 				indexBuffer_count++;
 			}
-
-			D += depths[collected_id[j]] * alpha * T;
 
 			T = test_T;
 
@@ -406,7 +407,7 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
-		out_depth[pix_id] = D / (1 - T);
+		out_median_depth[pix_id] = D;
 	}
 }
 
@@ -427,7 +428,7 @@ void FORWARD::render(
 	const float* bg_color,
 	float* out_color,
 	float* out_features,
-	float* out_depth,
+	float* out_median_depth,
 	float* transmittance,
 	int* num_covered_pixels,
 	int* out_indexBuffer, int index_buffer_size,
@@ -449,7 +450,7 @@ void FORWARD::render(
 		bg_color,
 		out_color,
 		out_features,
-		out_depth,
+		out_median_depth,
 		transmittance,
 		num_covered_pixels,
 		out_indexBuffer, index_buffer_size,

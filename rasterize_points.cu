@@ -77,7 +77,7 @@ RasterizeGaussiansCUDA(
 
   torch::Tensor out_color = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
   torch::Tensor out_features = torch::full({extra_C, H, W}, 0.0, float_opts);
-  torch::Tensor out_depth = torch::full({1, H, W}, 0.0, float_opts);
+  torch::Tensor out_median_depth = torch::full({1, H, W}, 0.0, float_opts);
   torch::Tensor out_indexBuffer = torch::full({index_buffer_size, H, W}, -1, int_opts);
   torch::Tensor radii = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
 
@@ -126,7 +126,7 @@ RasterizeGaussiansCUDA(
 		prefiltered,
 		out_color.contiguous().data<float>(),
 		out_features.contiguous().data<float>(),
-		out_depth.contiguous().data<float>(),
+		out_median_depth.contiguous().data<float>(),
 		transmittance.contiguous().data<float>(),
 		num_occluder.contiguous().data<int>(),
 		out_indexBuffer.contiguous().data<int>(), index_buffer_size,
@@ -134,7 +134,7 @@ RasterizeGaussiansCUDA(
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, out_features, out_depth, radii, geomBuffer, binningBuffer, imgBuffer, transmittance, num_occluder, out_indexBuffer);
+  return std::make_tuple(rendered, out_color, out_features, out_median_depth, radii, geomBuffer, binningBuffer, imgBuffer, transmittance, num_occluder, out_indexBuffer);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
