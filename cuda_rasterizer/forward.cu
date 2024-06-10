@@ -277,7 +277,6 @@ renderCUDA(
 	float* __restrict__ out_median_depth,
 	float* __restrict__ transmittance,
 	int* __restrict__ num_covered_pixels,
-	int* __restrict__ out_indexBuffer, int index_buffer_size,
 	bool record_transmittance)
 {
 	// Identify current tile and associated min/max pixel range.
@@ -308,9 +307,8 @@ renderCUDA(
 	float T = 1.0f;
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
-	uint32_t indexBuffer_count = 0;
 	float C[CHANNELS] = { 0 };
-	float D = 0;
+	float median_depth = {0};
 
 	// Iterate over batches until all done or range is complete
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -321,13 +319,6 @@ renderCUDA(
 			break;
 
 		// Collectively fetch per-Gaussian data from global to shared
-		//**** FAN:
-		// Here each thread play two roles:
-		// (1) responsible for a pixel to accumulate all gaussians afftecting this pixel
-		// (2) As a "part-time" worker to move gaussians to shared memory.
-		// In each round, all thread collectively move 16 * 16 gaussians to shared memory.
-		// And in the inner for-loop, each thread accumulates this moved 256 gaussians in own pixel position.
-		//****
 		int progress = i * BLOCK_SIZE + block.thread_rank();
 		if (range.x + progress < range.y)
 		{
@@ -349,6 +340,9 @@ renderCUDA(
 			float2 xy = collected_xy[j];
 			float2 d = { xy.x - pixf.x, xy.y - pixf.y };
 			float4 con_o = collected_conic_opacity[j];
+
+			float depth = depths[collected_id[j]];
+			if (depth < NEAR_PLANE) continue;
 			float power = -0.5f * (con_o.x * d.x * d.x + con_o.z * d.y * d.y) - con_o.y * d.x * d.y;
 			if (power > 0.0f)
 				continue;
@@ -360,7 +354,8 @@ renderCUDA(
 			float alpha = min(0.99f, con_o.w * exp(power));
 
 			if (record_transmittance){
-				atomicAdd(&transmittance[collected_id[j]], T * alpha);
+				float trans = pow(alpha, 2 * GAMMA) * pow(T, 2 - 2 * GAMMA);
+				atomicAdd(&transmittance[collected_id[j]], trans);
 				atomicAdd(&num_covered_pixels[collected_id[j]], 1);
 			}
 
@@ -373,8 +368,9 @@ renderCUDA(
 				continue;
 			}
 
-			if (T > 0.5)
-				D = depths[collected_id[j]];
+			if (T > 0.5) {
+				median_depth = depth;
+			}
 
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
@@ -384,11 +380,6 @@ renderCUDA(
 				// this might be slow due to lack of shared memory. Change of channel order may make it faster
 				for (int ch = 0; ch < extra_C; ch++)
 					out_extra_feat[ch * H * W + pix_id] += extra_features[collected_id[j] * extra_C + ch] * alpha * T;
-			}
-
-			if (inside && indexBuffer_count < index_buffer_size){
-				out_indexBuffer[indexBuffer_count * H * W + pix_id] = collected_id[j];
-				indexBuffer_count++;
 			}
 
 			T = test_T;
@@ -407,7 +398,7 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
-		out_median_depth[pix_id] = D;
+		out_median_depth[pix_id] = median_depth;
 	}
 }
 
@@ -431,7 +422,6 @@ void FORWARD::render(
 	float* out_median_depth,
 	float* transmittance,
 	int* num_covered_pixels,
-	int* out_indexBuffer, int index_buffer_size,
 	bool record_transmittance)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
@@ -453,7 +443,6 @@ void FORWARD::render(
 		out_median_depth,
 		transmittance,
 		num_covered_pixels,
-		out_indexBuffer, index_buffer_size,
 		record_transmittance);
 }
 

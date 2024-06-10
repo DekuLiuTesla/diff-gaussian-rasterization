@@ -32,7 +32,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
     return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -54,7 +54,6 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& campos,
 	const bool prefiltered,
 	const bool record_transmittance,
-	const int index_buffer_size,
 	const bool debug)
 {
   if (means3D.ndimension() != 2 || means3D.size(1) != 3) {
@@ -78,7 +77,6 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_color = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
   torch::Tensor out_features = torch::full({extra_C, H, W}, 0.0, float_opts);
   torch::Tensor out_median_depth = torch::full({1, H, W}, 0.0, float_opts);
-  torch::Tensor out_indexBuffer = torch::full({index_buffer_size, H, W}, -1, int_opts);
   torch::Tensor radii = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
 
   torch::Tensor transmittance = torch::full({P}, 0.0, float_opts);
@@ -129,12 +127,11 @@ RasterizeGaussiansCUDA(
 		out_median_depth.contiguous().data<float>(),
 		transmittance.contiguous().data<float>(),
 		num_occluder.contiguous().data<int>(),
-		out_indexBuffer.contiguous().data<int>(), index_buffer_size,
 		record_transmittance,
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, out_features, out_median_depth, radii, geomBuffer, binningBuffer, imgBuffer, transmittance, num_occluder, out_indexBuffer);
+  return std::make_tuple(rendered, out_color, out_features, out_median_depth, radii, geomBuffer, binningBuffer, imgBuffer, transmittance, num_occluder);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
