@@ -1,6 +1,6 @@
 import torch
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from diff_trim_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from ipdb import set_trace
 import time
 
